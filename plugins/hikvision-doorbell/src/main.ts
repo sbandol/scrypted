@@ -1270,13 +1270,14 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
 
         const status = getSdkStatus();
         const endpoint = await sdk.endpointManager.getPath();
-        let source: string;
+        // only the international site needs no sign-in, but it has no arm64 package
+        let download: string;
         if (status.arch === 'arm64')
-            source = `<a href="https://open.hikvision.com/download/5cda567cf47ae80dd41a54b3?type=10" target="_blank" rel="noopener">Hikvision Open Platform</a>, package "ArmLinux64" (the account signs in with a phone number)`;
+            download = `Download <a href="https://open.hikvision.com/download/5cda567cf47ae80dd41a54b3?type=10" target="_blank" rel="noopener">ArmLinux64</a> from the Hikvision Open Platform (sign-in with a phone number) and upload the zip below.`;
         else if (status.arch === 'x64')
-            source = `<a href="https://www.hikvision.com/en/support/tools/hitools/clf4633a00e385d6ea/" target="_blank" rel="noopener">Hikvision HiTools</a>, "Device Network SDK_Linux64"`;
+            download = `Download <a href="https://www.hikvision.com/en/support/tools/hitools/clf4633a00e385d6ea/" target="_blank" rel="noopener">Device Network SDK_Linux64</a> from Hikvision (no sign-in) and upload the zip below.`;
         else
-            source = `no Hikvision SDK for ${status.arch}`;
+            download = `Hikvision has no SDK for this server (${status.arch}).`;
 
         const radioGroups = [CallDetectionMode.Push];
         // the titled html block goes first: an untitled selector has no row
@@ -1288,8 +1289,7 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
                 radioGroups,
                 type: 'html',
                 readonly: true,
-                value: `<p>Push needs Hikvision's Device Network SDK. Hikvision does not allow redistributing it, so download it yourself and upload the zip below.</p>
-                <p>This server (${status.arch}): ${source}.</p>
+                value: `<p>Push needs Hikvision's Device Network SDK, which the plugin can't include. ${download}</p>
                 <iframe src="${endpoint}sdk?embed=1" title="Hikvision SDK upload" style="width:100%;height:150px;border:0"></iframe>`,
             },
             {

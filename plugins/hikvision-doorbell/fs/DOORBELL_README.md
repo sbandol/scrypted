@@ -62,7 +62,7 @@ In this mode the plugin learns about calls through the **Call Detection** settin
 
 Push needs the Device Network SDK, which Hikvision does not allow plugins to include:
 
-1. Download the SDK for the Scrypted server's processor: **ArmLinux64** from the [Hikvision Open Platform](https://open.hikvision.com/download/5cda567cf47ae80dd41a54b3?type=10) for arm64 (the account signs in with a phone number), or **Device Network SDK_Linux64** from [Hikvision HiTools](https://www.hikvision.com/en/support/tools/hitools/clf4633a00e385d6ea/) for x64.
+1. Download the SDK for the Scrypted server's processor: **ArmLinux64** from the [Hikvision Open Platform](https://open.hikvision.com/download/5cda567cf47ae80dd41a54b3?type=10) for arm64 (sign-in with a phone number), or **Device Network SDK_Linux64** from [Hikvision HiTools](https://www.hikvision.com/en/support/tools/hitools/clf4633a00e385d6ea/) for x64 (no sign-in).
 2. Select **Push (Hikvision SDK)** and upload the zip, exactly as downloaded, in the **Hikvision SDK** block that appears. Only the Linux library folder is kept, in `hcnetsdk/` in the plugin's data folder.
 3. **Push Status** shows `Armed` once the SDK is connected to the `doorbell` (SDK port 8000 unless changed on the `doorbell`).
 

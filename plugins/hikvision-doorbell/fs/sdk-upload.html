@@ -14,6 +14,8 @@
     --ok: #1a7f37;
     --err: #cf222e;
     --track: #eff2f5;
+    --tonal: rgba(31, 35, 40, 0.08);
+    --tonal-hover: rgba(31, 35, 40, 0.14);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -25,6 +27,8 @@
       --ok: #3fb950;
       --err: #f85149;
       --track: #21262d;
+      --tonal: rgba(230, 237, 243, 0.12);
+      --tonal-hover: rgba(230, 237, 243, 0.2);
     }
   }
   * { box-sizing: border-box; }
@@ -73,15 +77,23 @@
   /* flow-root keeps the last margin inside the body, which sizes the iframe */
   body.embed { padding: 0; display: flow-root; }
   body.embed .intro { display: none; }
-  /* Vuetify look, colors come from the Scrypted UI (see matchHost) */
+  /* Vuetify look (tonal buttons, like the UI's choice chips); colors come from the
+     Scrypted UI, see matchHost */
   body.embed .status { border-radius: 4px; }
   body.embed button, body.embed input[type=file]::file-selector-button {
+    height: 32px;
+    padding: 0 12px;
+    border: 0;
     border-radius: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.0892em;
+    background: var(--tonal);
+    color: var(--fg);
+    font-size: 0.9em;
     font-weight: 500;
+    letter-spacing: 0.0892em;
+    text-transform: uppercase;
   }
-  body.embed button { border-color: transparent; }
+  body.embed button:hover:not(:disabled),
+  body.embed input[type=file]:hover::file-selector-button { background: var(--tonal-hover); }
 </style>
 </head>
 <body>
@@ -146,6 +158,8 @@
       '--ok': color('success'),
       '--err': color('error'),
       '--track': color('on-surface', 0.12),
+      '--tonal': color('on-surface', 0.12),
+      '--tonal-hover': color('on-surface', 0.2),
     };
     if (!theme['--fg'])
       return;
@@ -207,9 +221,11 @@
         if (item)
           item.className = s.arch === arch ? 'here' : 'muted';
       }
-      let text = 'This server: ' + s.arch + '. ';
+      // embedded, the settings block already names this server's processor
+      let text = document.body.classList.contains('embed') ? '' : 'This server: ' + s.arch + '. ';
+      const version = s.installed && s.installed.version !== 'unknown' ? ' ' + s.installed.version : '';
       text += s.installed
-        ? 'Installed SDK: ' + s.installed.version + ' (' + s.installed.arch + '), uploaded ' + new Date(s.installed.installedAt).toLocaleString() + '.'
+        ? 'SDK' + version + ' installed ' + new Date(s.installed.installedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) + '.'
         : 'No SDK installed yet.';
       if (!s.supported)
         text += ' ' + s.reason + ' Call detection keeps polling.';
