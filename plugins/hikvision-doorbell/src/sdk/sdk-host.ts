@@ -33,7 +33,7 @@ export function pushStatusText (status: Pick<SdkStatus, 'supported' | 'reason' |
         return 'Armed';
     }
     if (push?.state === 'down') {
-        return `Down: ${push.reason} - polling`;
+        return `Down (${push.reason}) - polling`;
     }
     return 'Starting';
 }

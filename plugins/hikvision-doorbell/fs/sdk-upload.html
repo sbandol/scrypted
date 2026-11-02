@@ -47,7 +47,7 @@
   a { color: var(--accent); }
   .muted { color: var(--muted); }
   .here { font-weight: 600; }
-  .status { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 16px; white-space: pre-line; }
+  .status { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 16px; }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
   input[type=file] { max-width: 100%; color: var(--fg); font: inherit; }
   input[type=file]::file-selector-button {
@@ -225,16 +225,14 @@
           item.className = s.arch === arch ? 'here' : 'muted';
       }
       // embedded, the settings block already names this server's processor
-      let text = document.body.classList.contains('embed') ? '' : 'This server: ' + s.arch + '. ';
-      const version = s.installed && s.installed.version !== 'unknown' ? ' ' + s.installed.version : '';
-      text += s.installed
-        ? 'SDK' + version + ' installed ' + new Date(s.installed.installedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) + '.'
-        : 'No SDK installed yet.';
-      if (!s.supported)
-        text += ' ' + s.reason + ' Call detection keeps polling.';
-      // without an SDK, or on an unsupported server, the line above already says why push is off
+      const parts = document.body.classList.contains('embed') ? [] : ['Server: ' + s.arch];
+      parts.push(s.installed ? 'Version: ' + s.installed.version : 'No SDK installed');
+      // without an SDK, or on an unsupported server, the rest already says why push is off
       if (s.push && s.installed && s.supported)
-        text += '\nPush: ' + s.push;
+        parts.push('Status: ' + s.push);
+      let text = parts.join(' | ');
+      if (!s.supported)
+        text += '. ' + s.reason + ' Call detection keeps polling.';
       statusEl.textContent = text;
     }
     catch (e) {

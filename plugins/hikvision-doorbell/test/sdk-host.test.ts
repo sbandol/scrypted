@@ -13,5 +13,5 @@ test('push status text', () => {
     assert.equal (pushStatusText ({ supported: true, installed: INSTALLED }, { state: 'starting' }), 'Starting');
     assert.equal (pushStatusText ({ supported: true, installed: INSTALLED }, { state: 'armed' }), 'Armed');
     assert.equal (pushStatusText ({ supported: true, installed: INSTALLED }, { state: 'down', reason: 'station connection lost' }),
-        'Down: station connection lost - polling');
+        'Down (station connection lost) - polling');
 });
