@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hikvision SDK Upload</title>
+<title>Hikvision SDK</title>
 <style>
   :root {
     --bg: #ffffff;
@@ -32,55 +32,20 @@
     }
   }
   * { box-sizing: border-box; }
+  /* flow-root keeps the last margin inside the body, which sizes the iframe */
   body {
+    display: flow-root;
     margin: 0;
-    padding: 16px;
     background: var(--bg);
     color: var(--fg);
     font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
-  main { max-width: 640px; }
-  h1 { font-size: 18px; margin: 0 0 8px; }
-  p { margin: 0 0 12px; }
-  ol { margin: 0 0 16px; padding-left: 20px; }
-  li { margin-bottom: 8px; }
-  a { color: var(--accent); }
   .muted { color: var(--muted); }
-  .here { font-weight: 600; }
-  .status { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 16px; }
+  .status { padding: 8px 12px; border: 1px solid var(--line); border-radius: 4px; margin-bottom: 16px; }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
   input[type=file] { max-width: 100%; color: var(--fg); font: inherit; }
-  input[type=file]::file-selector-button {
-    margin-right: 8px;
-    padding: 6px 14px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--fg);
-    font: inherit;
-    cursor: pointer;
-  }
-  button {
-    padding: 6px 14px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--accent);
-    color: #ffffff;
-    font: inherit;
-    cursor: pointer;
-  }
-  button:disabled { opacity: 0.5; cursor: default; }
-  .bar { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; margin-bottom: 8px; }
-  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
-  .ok { color: var(--ok); }
-  .err { color: var(--err); }
-  /* flow-root keeps the last margin inside the body, which sizes the iframe */
-  body.embed { padding: 0; display: flow-root; }
-  body.embed .intro { display: none; }
-  /* Vuetify look (tonal buttons, like the UI's choice chips); colors come from the
-     Scrypted UI, see matchHost */
-  body.embed .status { border-radius: 4px; }
-  body.embed button, body.embed input[type=file]::file-selector-button {
+  /* Vuetify tonal buttons, like the UI's choice chips; colors come from the UI, see matchHost */
+  button, input[type=file]::file-selector-button {
     height: 32px;
     padding: 0 12px;
     border: 0;
@@ -91,37 +56,20 @@
     font-weight: 500;
     letter-spacing: 0.0892em;
     text-transform: uppercase;
+    cursor: pointer;
   }
-  body.embed button:hover:not(:disabled),
-  body.embed input[type=file]:hover::file-selector-button { background: var(--tonal-hover); }
+  input[type=file]::file-selector-button { margin-right: 8px; }
+  button:hover:not(:disabled), input[type=file]:hover::file-selector-button { background: var(--tonal-hover); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .bar { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; margin-bottom: 8px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+  .ok { color: var(--ok); }
+  .err { color: var(--err); }
 </style>
 </head>
 <body>
 <main>
-  <div class="intro">
-  <h1>Hikvision SDK for call push</h1>
-  <p>
-    Push mode lets the door station tell Scrypted about a ring the moment the button is pressed,
-    instead of Scrypted asking it every second. It needs Hikvision's Device Network SDK, which
-    Hikvision does not allow plugins to include, so download it yourself and upload the zip here.
-  </p>
-  <ol>
-    <li>
-      Download the Device Network SDK for this server's processor:
-      <ul>
-        <li id="pkg-arm64"><b>arm64</b> (Raspberry Pi and most ARM boxes): the "ArmLinux64" package on
-          <a href="https://open.hikvision.com/download/5cda567cf47ae80dd41a54b3?type=10" target="_blank" rel="noopener">Hikvision's open platform</a>.
-          The download asks for a Hikvision open platform account, which signs in with a phone number.</li>
-        <li id="pkg-x64"><b>x64</b> (Intel or AMD): "Device Network SDK_Linux64" on
-          <a href="https://www.hikvision.com/en/support/tools/hitools/clf4633a00e385d6ea/" target="_blank" rel="noopener">Hikvision HiTools</a>.</li>
-      </ul>
-    </li>
-    <li>Upload the zip exactly as downloaded. Only its Linux library folder is kept.</li>
-    <li>In the doorbell's settings, set Call Detection to "Push (Hikvision SDK)".</li>
-  </ol>
-  </div>
-
-  <div class="status" id="status">Checking this server...</div>
+  <div class="status" id="status">Checking the SDK...</div>
 
   <div class="row">
     <input type="file" id="file" accept=".zip,application/zip">
@@ -132,11 +80,8 @@
 </main>
 <script>
 (() => {
-  // embedded in the doorbell's settings, which already explain where to get the SDK
-  if (new URLSearchParams(location.search).has('embed')) {
-    document.body.classList.add('embed');
-    matchHost();
-  }
+  // The box in a doorbell's settings, which explain where to get the SDK.
+  matchHost();
 
   // Take the Scrypted UI's theme and grow the iframe to fit. The page is served from the
   // same origin, so the iframe element's styles (Vuetify theme variables) are readable.
@@ -204,7 +149,7 @@
   const bar = document.getElementById('progress');
   const result = document.getElementById('result');
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  // set when embedded in a doorbell's settings: the status then includes its push state
+  // the doorbell whose settings show the box: the status then includes its push state
   const device = new URLSearchParams(location.search).get('device');
 
   function show(text, kind) {
@@ -219,14 +164,7 @@
       if (!response.ok)
         throw new Error('HTTP ' + response.status);
       const s = await response.json();
-      for (const arch of ['arm64', 'x64']) {
-        const item = document.getElementById('pkg-' + arch);
-        if (item)
-          item.className = s.arch === arch ? 'here' : 'muted';
-      }
-      // embedded, the settings block already names this server's processor
-      const parts = document.body.classList.contains('embed') ? [] : ['Server: ' + s.arch];
-      parts.push(s.installed ? 'Version: ' + s.installed.version : 'No SDK installed');
+      const parts = [s.installed ? 'Version: ' + s.installed.version : 'No SDK installed'];
       // without an SDK, or on an unsupported server, the rest already says why push is off
       if (s.push && s.installed && s.supported)
         parts.push('Status: ' + s.push);
