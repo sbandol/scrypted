@@ -70,7 +70,8 @@
   .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
   .ok { color: var(--ok); }
   .err { color: var(--err); }
-  body.embed { padding: 0; }
+  /* flow-root keeps the last margin inside the body, which sizes the iframe */
+  body.embed { padding: 0; display: flow-root; }
   body.embed .intro { display: none; }
   /* Vuetify look, colors come from the Scrypted UI (see matchHost) */
   body.embed .status { border-radius: 4px; }
@@ -153,7 +154,30 @@
       root.setProperty(name, value);
     // a color-scheme different from the host's makes the browser paint the iframe opaque
     root.colorScheme = cs.colorScheme;
+    root.overflow = 'hidden';
     document.body.style.font = cs.fontSize + '/1.5 ' + cs.fontFamily;
+
+    // the UI's web font is declared in its own stylesheets; copy those @font-face rules,
+    // with their URLs made absolute, since they are relative to the stylesheet
+    const families = cs.fontFamily.split(',').map((f) => f.trim().replace(/["']/g, ''));
+    const faces = [];
+    for (const sheet of host.ownerDocument.styleSheets) {
+      let rules;
+      try {
+        rules = sheet.cssRules;
+      }
+      catch (e) {
+        continue;
+      }
+      for (const rule of rules) {
+        if (rule.type === CSSRule.FONT_FACE_RULE
+          && families.includes(rule.style.getPropertyValue('font-family').trim().replace(/["']/g, '')))
+          faces.push(rule.cssText.replace(/url\("([^"]*)"\)/g, (_, url) => 'url("' + new URL(url, sheet.href || host.ownerDocument.baseURI) + '")'));
+      }
+    }
+    const style = document.createElement('style');
+    style.textContent = faces.join('\n');
+    document.head.appendChild(style);
     // the body, not the document: the document is never shorter than the iframe
     new ResizeObserver(() => host.style.height = Math.ceil(document.body.getBoundingClientRect().height) + 'px').observe(document.body);
   }
