@@ -19,7 +19,7 @@ import { makeDebugConsole, DebugController } from "./debug-console";
 import { RtpStreamSwitcher } from "./rtp-stream-switcher";
 import { HttpStreamSwitcher, HttpSession } from "./http-stream-switcher";
 import { installSdkZip } from "./sdk/sdk-package";
-import { SdkUploadSession } from "./sdk/sdk-upload";
+import { refuseSdkRequest, SdkUploadSession } from "./sdk/sdk-upload";
 import { getSdkStatus, pluginVolume } from "./sdk/sdk-host";
 
 const { mediaManager, deviceManager } = sdk;
@@ -1521,7 +1521,12 @@ export class HikvisionDoorbellProvider extends RtspProvider implements HttpReque
     // SDK upload page: <endpoint>/sdk (page), /sdk/status (JSON), /sdk/upload (WebSocket)
     async onRequest(request: HttpRequest, response: HttpResponse): Promise<void> {
         const path = endpointPath (request);
-        if (path === '/sdk' || path === '/sdk/') {
+        const refused = refuseSdkRequest (request);
+        if (refused) {
+            this.console.warn (`Refused SDK page request: ${refused}`);
+            response.send ('Forbidden', { code: 403 });
+        }
+        else if (path === '/sdk' || path === '/sdk/') {
             response.sendFile ('sdk-upload.html', {
                 headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
             });
@@ -1537,7 +1542,10 @@ export class HikvisionDoorbellProvider extends RtspProvider implements HttpReque
     }
 
     async onConnection(request: HttpRequest, ws: WebSocket): Promise<void> {
-        if (endpointPath (request) !== '/sdk/upload') {
+        const refused = refuseSdkRequest (request);
+        if (refused || endpointPath (request) !== '/sdk/upload') {
+            if (refused)
+                this.console.warn (`Refused SDK upload connection: ${refused}`);
             ws.close();
             return;
         }

@@ -4,6 +4,47 @@ export const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
 const PROGRESS_STEP_BYTES = 1024 * 1024;
 const DATA_MARKER = 0x00;
 
+export interface SdkRequest
+{
+    isPublicEndpoint?: boolean;
+    username?: string;
+    aclId?: string;
+    headers?: { [header: string]: string };
+}
+
+/**
+ * Why a request to the SDK page, status or upload is refused, or undefined when it is
+ * allowed. The upload installs native code that push mode runs, so it needs a signed-in
+ * admin (no ACL) on the private endpoint, and browsers must come from the same origin
+ * (a WebSocket carries the Scrypted login cookie from any site).
+ */
+export function refuseSdkRequest (request: SdkRequest): string | undefined
+{
+    if (request.isPublicEndpoint) {
+        return 'public endpoint';
+    }
+    if (!request.username) {
+        return 'not signed in';
+    }
+    if (request.aclId) {
+        return 'restricted user';
+    }
+    const origin = request.headers?.origin;
+    if (origin) {
+        let originHost: string;
+        try {
+            originHost = new URL (origin).host;
+        }
+        catch {
+            return 'invalid origin';
+        }
+        if (originHost !== request.headers?.host) {
+            return 'cross-origin request';
+        }
+    }
+    return undefined;
+}
+
 /**
  * One SDK zip upload over a WebSocket. Client protocol:
  *   {"start":{"size":N,"name":"..."}}   text

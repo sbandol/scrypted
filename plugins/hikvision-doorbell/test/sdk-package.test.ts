@@ -147,3 +147,9 @@ test('push unsupported off linux, on other arches or without python', () => {
     assert.deepEqual (pushSupport ('linux', 'arm64', true), { supported: true });
     assert.deepEqual (pushSupport ('linux', 'x64', true), { supported: true });
 });
+
+test('rejects a lib folder that unpacks beyond the size cap', withVolume (async (volume) => {
+    const zip = sdkZip ({ extra: { [`${TOP}/lib/big.so`]: Buffer.alloc (4096) } });
+    await assert.rejects (installSdkZip (zip, volume, 'arm64', 2048), /unpacks to more than/);
+    assert.equal (getInstalledSdk (volume, 'arm64'), undefined);
+}));

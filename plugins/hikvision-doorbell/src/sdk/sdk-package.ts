@@ -23,6 +23,8 @@ const INFO_FILE = 'sdk.json';
 const PRESERVED_FILES = ['diagnostics.jsonl', 'diagnostics.jsonl.1'];
 const S_IFMT = 0o170000;
 const S_IFLNK = 0o120000;
+// real SDK lib folders unpack to well under 100 MB
+const MAX_EXTRACT_BYTES = 500 * 1024 * 1024;
 
 /** Architecture of an ELF binary from its header (e_machine at offset 18). */
 export function elfArch (header: Buffer): 'arm64' | 'x64' | undefined
@@ -42,7 +44,7 @@ export function elfArch (header: Buffer): 'arm64' | 'x64' | undefined
  * libhcnetsdk.so and HCNetSDKCom/) into <volumeDir>/hcnetsdk, replacing any
  * previous install. Throws SdkInstallError with a user-facing reason.
  */
-export async function installSdkZip (zip: Buffer, volumeDir: string, arch: string): Promise<SdkInfo>
+export async function installSdkZip (zip: Buffer, volumeDir: string, arch: string, maxExtractBytes = MAX_EXTRACT_BYTES): Promise<SdkInfo>
 {
     let entries: AdmZip.IZipEntry[];
     try {
@@ -71,6 +73,13 @@ export async function installSdkZip (zip: Buffer, volumeDir: string, arch: strin
     if (found !== arch) {
         throw new SdkInstallError (`The zip holds the ${found} SDK, but this Scrypted server is ${arch}. `
             + `Download the ${arch === 'arm64' ? 'ArmLinux64' : 'Linux64'} package instead.`);
+    }
+
+    const unpackedBytes = entries
+        .filter ((e) => !e.isDirectory && e.entryName.startsWith (libDir))
+        .reduce ((sum, e) => sum + e.header.size, 0);
+    if (unpackedBytes > maxExtractBytes) {
+        throw new SdkInstallError (`The SDK folder in the zip unpacks to more than ${Math.round (maxExtractBytes / 1024 / 1024)} MB, which is not a Hikvision SDK.`);
     }
 
     const finalDir = join (volumeDir, INSTALL_DIR);

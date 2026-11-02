@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_UPLOAD_BYTES, SdkUploadSession } from '../src/sdk/sdk-upload';
+import { MAX_UPLOAD_BYTES, refuseSdkRequest, SdkUploadSession } from '../src/sdk/sdk-upload';
 import { SdkInfo } from '../src/sdk/sdk-package';
 
 const INFO: SdkInfo = { version: '6.1.9.48_build20230410', arch: 'arm64', libDir: '/volume/hcnetsdk', installedAt: '2026-11-02T00:00:00.000Z' };
@@ -78,4 +78,15 @@ test('frames arriving as bytes are told apart by the 0x00 data marker', async ()
     assert.deepEqual (sent.at (-1), { ok: INFO });
     session.onMessage ('{"end":true}');
     assert.ok (sent.at (-1).error);
+});
+
+test('sdk requests need a signed-in admin from the same origin', () => {
+    const admin = { username: 'admin', headers: { host: '192.168.1.54:10443', origin: 'https://192.168.1.54:10443' } };
+    assert.equal (refuseSdkRequest (admin), undefined);
+    assert.equal (refuseSdkRequest ({ username: 'admin', headers: { host: '192.168.1.54:10443' } }), undefined);
+    assert.ok (refuseSdkRequest ({ ...admin, isPublicEndpoint: true }));
+    assert.ok (refuseSdkRequest ({ ...admin, username: undefined }));
+    assert.ok (refuseSdkRequest ({ ...admin, aclId: 'viewer' }));
+    assert.ok (refuseSdkRequest ({ ...admin, headers: { ...admin.headers, origin: 'https://evil.example' } }));
+    assert.ok (refuseSdkRequest ({ ...admin, headers: { ...admin.headers, origin: 'not a url' } }));
 });
