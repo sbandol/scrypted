@@ -1273,7 +1273,7 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
         // only the international site needs no sign-in, but it has no arm64 package
         let download: string;
         if (status.arch === 'arm64')
-            download = `Download <a href="https://open.hikvision.com/download/5cda567cf47ae80dd41a54b3?type=10" target="_blank" rel="noopener">ArmLinux64</a> from the Hikvision Open Platform (sign-in with a phone number) and upload the zip below.`;
+            download = `Download <a href="https://open.hikvision.com/download/5cda567cf47ae80dd41a54b3?type=10" target="_blank" rel="noopener">ArmLinux64</a> from the Hikvision Open Platform and upload the zip below.`;
         else if (status.arch === 'x64')
             download = `Download <a href="https://www.hikvision.com/en/support/tools/hitools/clf4633a00e385d6ea/" target="_blank" rel="noopener">Device Network SDK_Linux64</a> from Hikvision (no sign-in) and upload the zip below.`;
         else
@@ -1301,19 +1301,19 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
                 value: parseInt (this.storage.getItem (SDK_PORT_KEY)) || DEFAULT_SDK_PORT,
             },
             {
+                key: 'pushStatus',
+                title: 'Push Status',
+                radioGroups,
+                readonly: true,
+                value: pushStatusText (status, this.eventApi?.getPushState(), mode === CallDetectionMode.Push),
+            },
+            {
                 key: SDK_DIAGNOSTICS_KEY,
                 title: 'Log All SDK Events',
                 radioGroups,
                 description: 'Diagnostics: writes every event the doorbell sends over the SDK, plus poll results during calls, to hcnetsdk/diagnostics.jsonl in the plugin folder (5 MB, one rotation).',
                 type: 'boolean',
                 value: this.storage.getItem (SDK_DIAGNOSTICS_KEY) === 'true',
-            },
-            {
-                key: 'pushStatus',
-                title: 'Push Status',
-                radioGroups,
-                readonly: true,
-                value: pushStatusText (status, this.eventApi?.getPushState(), mode === CallDetectionMode.Push),
             },
         );
         return ret;
