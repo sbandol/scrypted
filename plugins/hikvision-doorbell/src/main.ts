@@ -1265,7 +1265,7 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
             {
                 title: 'Call Detection',
                 value: `<p>Polling asks the doorbell for its call status every second. Push receives call start and end from the Hikvision SDK and polls only during a call.</p>
-                <p><b>Some firmware versions do not push call events; if rings are missed, switch back to Polling.</b></p>`,
+                <p><b>Warning: Some firmware versions do not push call events; if rings are missed, use Polling.</b></p>`,
                 type: 'html',
                 readonly: true,
             },
