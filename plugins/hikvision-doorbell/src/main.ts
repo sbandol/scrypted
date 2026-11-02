@@ -1249,8 +1249,9 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
             return [];
 
         const mode = this.storage.getItem (CALL_DETECTION_KEY) || CallDetectionMode.Polling;
-        // same layout as SIP Mode: titled html, then an untitled selector;
-        // immediate so the push settings show up as soon as Push is picked
+        // same layout as SIP Mode: titled html, then an untitled selector. The selector is a
+        // radio panel: the UI shows the settings in its selected radio group before Save,
+        // so the push settings are always returned and tagged with the Push group.
         const ret: Setting[] = [
             {
                 title: 'Call Detection',
@@ -1261,13 +1262,11 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
             },
             {
                 key: CALL_DETECTION_KEY,
+                type: 'radiopanel',
                 choices: Object.values (CallDetectionMode),
                 value: mode,
-                immediate: true,
             },
         ];
-        if (mode !== CallDetectionMode.Push)
-            return ret;
 
         const status = getSdkStatus();
         const endpoint = await sdk.endpointManager.getPath();
@@ -1279,12 +1278,14 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
         else
             source = `no Hikvision SDK for ${status.arch}`;
 
+        const radioGroups = [CallDetectionMode.Push];
         // the titled html block goes first: an untitled selector has no row
         // margin, so a plain setting right after it would overlap it
         ret.push (
             {
                 key: 'sdkSetup',
                 title: 'Hikvision SDK',
+                radioGroups,
                 type: 'html',
                 readonly: true,
                 value: `<p>Push needs Hikvision's Device Network SDK. Hikvision does not allow redistributing it, so download it yourself and upload the zip below.</p>
@@ -1294,6 +1295,7 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
             {
                 key: SDK_PORT_KEY,
                 title: 'SDK Port',
+                radioGroups,
                 description: 'Device SDK (server) port, 8000 unless changed on the doorbell.',
                 type: 'number',
                 value: parseInt (this.storage.getItem (SDK_PORT_KEY)) || DEFAULT_SDK_PORT,
@@ -1301,6 +1303,7 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
             {
                 key: SDK_DIAGNOSTICS_KEY,
                 title: 'Log All SDK Events',
+                radioGroups,
                 description: 'Diagnostics: writes every event the doorbell sends over the SDK, plus poll results during calls, to hcnetsdk/diagnostics.jsonl in the plugin folder (5 MB, one rotation).',
                 type: 'boolean',
                 value: this.storage.getItem (SDK_DIAGNOSTICS_KEY) === 'true',
@@ -1308,8 +1311,9 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
             {
                 key: 'pushStatus',
                 title: 'Push Status',
+                radioGroups,
                 readonly: true,
-                value: pushStatusText (status, this.eventApi?.getPushState()),
+                value: pushStatusText (status, this.eventApi?.getPushState(), mode === CallDetectionMode.Push),
             },
         );
         return ret;
