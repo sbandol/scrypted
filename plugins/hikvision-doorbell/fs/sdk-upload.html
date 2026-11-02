@@ -75,7 +75,7 @@
     <input type="file" id="file" accept=".zip,application/zip">
     <button id="upload" disabled>Upload</button>
   </div>
-  <div class="bar"><div id="progress"></div></div>
+  <div class="bar" hidden><div id="progress"></div></div>
   <div id="result" class="muted"></div>
 </main>
 <script>
@@ -248,6 +248,8 @@
     button.disabled = true;
     fileEl.disabled = true;
     bar.style.width = '0';
+    // the bar only shows while an upload runs
+    bar.parentElement.hidden = false;
     show('Uploading ' + file.name + '...');
     try {
       await upload(file);
@@ -255,6 +257,7 @@
     catch (e) {
       show(e.message, 'err');
     }
+    bar.parentElement.hidden = true;
     button.disabled = false;
     fileEl.disabled = false;
     loadStatus();
