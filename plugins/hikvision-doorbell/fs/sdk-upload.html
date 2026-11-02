@@ -89,30 +89,44 @@
     const host = window.frameElement;
     if (!host)
       return;
-    const cs = getComputedStyle(host);
-    const color = (name, alpha) => {
-      const v = cs.getPropertyValue('--v-theme-' + name).trim();
-      return v && (alpha ? 'rgba(' + v + ', ' + alpha + ')' : 'rgb(' + v + ')');
-    };
-    const theme = {
-      '--bg': 'transparent',
-      '--fg': color('on-surface'),
-      '--muted': color('on-surface', 0.7),
-      '--line': color('on-surface', 0.38),
-      '--accent': color('primary'),
-      '--ok': color('success'),
-      '--err': color('error'),
-      '--track': color('on-surface', 0.12),
-      '--tonal': color('on-surface', 0.12),
-      '--tonal-hover': color('on-surface', 0.2),
-    };
-    if (!theme['--fg'])
-      return;
     const root = document.documentElement.style;
-    for (const [name, value] of Object.entries(theme))
-      root.setProperty(name, value);
-    // a color-scheme different from the host's makes the browser paint the iframe opaque
-    root.colorScheme = cs.colorScheme;
+    let applied = '';
+    // false outside the Vuetify UI
+    const applyTheme = () => {
+      const cs = getComputedStyle(host);
+      const color = (name, alpha) => {
+        const v = cs.getPropertyValue('--v-theme-' + name).trim();
+        return v && (alpha ? 'rgba(' + v + ', ' + alpha + ')' : 'rgb(' + v + ')');
+      };
+      const theme = {
+        '--bg': 'transparent',
+        '--fg': color('on-surface'),
+        '--muted': color('on-surface', 0.7),
+        '--line': color('on-surface', 0.38),
+        '--accent': color('primary'),
+        '--ok': color('success'),
+        '--err': color('error'),
+        '--track': color('on-surface', 0.12),
+        '--tonal': color('on-surface', 0.12),
+        '--tonal-hover': color('on-surface', 0.2),
+      };
+      if (!theme['--fg'])
+        return false;
+      const key = JSON.stringify(theme) + cs.colorScheme;
+      if (key === applied)
+        return true;
+      applied = key;
+      for (const [name, value] of Object.entries(theme))
+        root.setProperty(name, value);
+      // a color-scheme different from the host's makes the browser paint the iframe opaque
+      root.colorScheme = cs.colorScheme;
+      return true;
+    };
+    if (!applyTheme())
+      return;
+    // the UI's light/dark switch changes the theme while the box is open
+    setInterval(() => document.hidden || applyTheme(), 1000);
+    const cs = getComputedStyle(host);
     root.overflow = 'hidden';
     document.body.style.font = cs.fontSize + '/1.5 ' + cs.fontFamily;
 
