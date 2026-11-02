@@ -15,10 +15,3 @@ test('push status text', () => {
     assert.equal (pushStatusText ({ supported: true, installed: INSTALLED }, { state: 'down', reason: 'station connection lost' }),
         'Down: station connection lost - polling');
 });
-
-test('push status text before push mode is saved', () => {
-    assert.equal (pushStatusText ({ supported: true, installed: INSTALLED }, undefined, false), 'Not running - save to start push');
-    assert.equal (pushStatusText ({ supported: true, installed: null }, undefined, false), 'SDK not installed - polling');
-    assert.equal (pushStatusText ({ supported: false, reason: 'Push needs python3 on the Scrypted server.', installed: null }, undefined, false),
-        'Unsupported: Push needs python3 on the Scrypted server - polling');
-});

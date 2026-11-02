@@ -20,20 +20,14 @@ export interface PushState
 
 let pythonFound: boolean | undefined;
 
-/**
- * The "Push Status" setting; every state without an armed SDK says that polling covers it.
- * `active` is false while the saved mode is still Polling (Push picked, not saved yet).
- */
-export function pushStatusText (status: Pick<SdkStatus, 'supported' | 'reason' | 'installed'>, push?: PushState, active = true): string
+/** The "Push Status" setting; every state without an armed SDK says that polling covers it. */
+export function pushStatusText (status: Pick<SdkStatus, 'supported' | 'reason' | 'installed'>, push?: PushState): string
 {
     if (!status.supported) {
         return `Unsupported: ${(status.reason || '').replace (/\.$/, '')} - polling`;
     }
     if (!status.installed) {
         return 'SDK not installed - polling';
-    }
-    if (!active) {
-        return 'Not running - save to start push';
     }
     if (push?.state === 'armed') {
         return 'Armed';
