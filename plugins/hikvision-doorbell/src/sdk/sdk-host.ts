@@ -11,7 +11,32 @@ export interface SdkStatus
     reason?: string;
 }
 
+/** Live state of a doorbell's SDK sidecar. */
+export interface PushState
+{
+    state: 'starting' | 'armed' | 'down';
+    reason?: string;
+}
+
 let pythonFound: boolean | undefined;
+
+/** The "Push Status" setting; every state without an armed SDK says that polling covers it. */
+export function pushStatusText (status: Pick<SdkStatus, 'supported' | 'reason' | 'installed'>, push?: PushState): string
+{
+    if (!status.supported) {
+        return `Unsupported: ${(status.reason || '').replace (/\.$/, '')} - polling`;
+    }
+    if (!status.installed) {
+        return 'SDK not installed - polling';
+    }
+    if (push?.state === 'armed') {
+        return 'Armed';
+    }
+    if (push?.state === 'down') {
+        return `Down: ${push.reason} - polling`;
+    }
+    return 'Starting';
+}
 
 /** Where the plugin keeps its data; the SDK goes to <volume>/hcnetsdk. */
 export function pluginVolume(): string

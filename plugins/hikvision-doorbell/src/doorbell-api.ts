@@ -17,6 +17,7 @@ import { HikvisionDoorbellEvent } from './doorbell-events';
 import { CallDetection, CallStatusController, PolledCallStatus, PushSdkConfig } from './call-status-controller';
 import { SdkCallSource } from './sdk/sdk-call-source';
 import { DiagnosticsLog } from './sdk/diagnostics-log';
+import { PushState } from './sdk/sdk-host';
 
 export { HikvisionDoorbellEvent };
 
@@ -98,6 +99,8 @@ export class HikvisionDoorbellAPI extends HikvisionCameraAPI
     private callController?: CallStatusController;
     private sdkSource?: SdkCallSource;
     private diagnostics?: DiagnosticsLog;
+    private pushState?: PushState;
+    onPushStateChange?: () => void;
 
     // Alert stream health tracking
     private alertTick?: number;
@@ -842,15 +845,18 @@ export class HikvisionDoorbellAPI extends HikvisionCameraAPI
         source.on ('ready', (sdkVersion: string) => {
             this.console.info (`Hikvision SDK ${sdkVersion} connected, waiting for call push`);
             this.callController?.onSdkReady();
+            this.setPushState ({ state: 'armed' });
         });
         source.on ('down', (reason: string) => {
             this.console.warn (`Hikvision SDK push unavailable (${reason}), polling call status`);
             this.callController?.onSdkDown();
+            this.setPushState ({ state: 'down', reason });
         });
         source.on ('ring', () => this.callController?.onSdkRing());
         source.on ('end', () => this.callController?.onSdkEnd());
         source.on ('message', (message) => this.diagnostics?.append ('sdk', message));
         this.sdkSource = source;
+        this.setPushState ({ state: 'starting' });
         source.start();
     }
 
@@ -862,6 +868,19 @@ export class HikvisionDoorbellAPI extends HikvisionCameraAPI
         this.callController = undefined;
         this.stopCallStatusPolling();
         this.diagnostics = undefined;
+        this.pushState = undefined;
+    }
+
+    /** State of the SDK sidecar, undefined unless push is running. */
+    getPushState(): PushState | undefined
+    {
+        return this.pushState;
+    }
+
+    private setPushState (state: PushState)
+    {
+        this.pushState = state;
+        this.onPushStateChange?.();
     }
 
     /**

@@ -60,10 +60,13 @@
   .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
   .ok { color: var(--ok); }
   .err { color: var(--err); }
+  body.embed { padding: 0; }
+  body.embed .intro { display: none; }
 </style>
 </head>
 <body>
 <main>
+  <div class="intro">
   <h1>Hikvision SDK for call push</h1>
   <p>
     Push mode lets the door station tell Scrypted about a ring the moment the button is pressed,
@@ -84,6 +87,7 @@
     <li>Upload the zip exactly as downloaded. Only its Linux library folder is kept.</li>
     <li>In the doorbell's settings, set Call Detection to "Push (Hikvision SDK)".</li>
   </ol>
+  </div>
 
   <div class="status" id="status">Checking this server...</div>
 
@@ -96,6 +100,9 @@
 </main>
 <script>
 (() => {
+  // embedded in the doorbell's settings, which already explain where to get the SDK
+  if (new URLSearchParams(location.search).has('embed'))
+    document.body.classList.add('embed');
   const CHUNK = 256 * 1024 - 1;          // data frame = 0x00 marker + chunk, at most 256 KB
   const MAX_BUFFERED = 4 * 1024 * 1024;
   const base = location.pathname.replace(/\/sdk\/?$/, '/sdk');
