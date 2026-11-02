@@ -1249,13 +1249,23 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
             return [];
 
         const mode = this.storage.getItem (CALL_DETECTION_KEY) || CallDetectionMode.Polling;
-        const ret: Setting[] = [{
-            key: CALL_DETECTION_KEY,
-            title: 'Call Detection',
-            description: 'Polling asks the doorbell for its call status every second. Push receives call start and end from the Hikvision SDK and polls only during a call. Some firmware versions do not push call events; if rings are missed, switch back to Polling.',
-            choices: Object.values (CallDetectionMode),
-            value: mode,
-        }];
+        // same layout as SIP Mode: titled html, then an untitled selector;
+        // immediate so the push settings show up as soon as Push is picked
+        const ret: Setting[] = [
+            {
+                title: 'Call Detection',
+                value: `<p>Polling asks the doorbell for its call status every second. Push receives call start and end from the Hikvision SDK and polls only during a call.</p>
+                <p>Some firmware versions do not push call events; if rings are missed, switch back to Polling.</p>`,
+                type: 'html',
+                readonly: true,
+            },
+            {
+                key: CALL_DETECTION_KEY,
+                choices: Object.values (CallDetectionMode),
+                value: mode,
+                immediate: true,
+            },
+        ];
         if (mode !== CallDetectionMode.Push)
             return ret;
 
@@ -1269,14 +1279,9 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
         else
             source = `no Hikvision SDK for ${status.arch}`;
 
+        // the titled html block goes first: an untitled selector has no row
+        // margin, so a plain setting right after it would overlap it
         ret.push (
-            {
-                key: SDK_PORT_KEY,
-                title: 'SDK Port',
-                description: 'Device SDK (server) port, 8000 unless changed on the doorbell.',
-                type: 'number',
-                value: parseInt (this.storage.getItem (SDK_PORT_KEY)) || DEFAULT_SDK_PORT,
-            },
             {
                 key: 'sdkSetup',
                 title: 'Hikvision SDK',
@@ -1285,6 +1290,13 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
                 value: `<p>Push needs Hikvision's Device Network SDK. Hikvision does not allow redistributing it, so download it yourself and upload the zip below.</p>
                 <p>This server (${status.arch}): ${source}.</p>
                 <iframe src="${endpoint}sdk?embed=1" title="Hikvision SDK upload" style="width:100%;height:150px;border:0"></iframe>`,
+            },
+            {
+                key: SDK_PORT_KEY,
+                title: 'SDK Port',
+                description: 'Device SDK (server) port, 8000 unless changed on the doorbell.',
+                type: 'number',
+                value: parseInt (this.storage.getItem (SDK_PORT_KEY)) || DEFAULT_SDK_PORT,
             },
             {
                 key: SDK_DIAGNOSTICS_KEY,
