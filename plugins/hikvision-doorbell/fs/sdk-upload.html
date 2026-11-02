@@ -45,7 +45,17 @@
   .here { font-weight: 600; }
   .status { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 16px; }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
-  input[type=file] { max-width: 100%; color: var(--fg); }
+  input[type=file] { max-width: 100%; color: var(--fg); font: inherit; }
+  input[type=file]::file-selector-button {
+    margin-right: 8px;
+    padding: 6px 14px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--fg);
+    font: inherit;
+    cursor: pointer;
+  }
   button {
     padding: 6px 14px;
     border: 1px solid var(--line);
@@ -62,6 +72,15 @@
   .err { color: var(--err); }
   body.embed { padding: 0; }
   body.embed .intro { display: none; }
+  /* Vuetify look, colors come from the Scrypted UI (see matchHost) */
+  body.embed .status { border-radius: 4px; }
+  body.embed button, body.embed input[type=file]::file-selector-button {
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.0892em;
+    font-weight: 500;
+  }
+  body.embed button { border-color: transparent; }
 </style>
 </head>
 <body>
@@ -101,8 +120,43 @@
 <script>
 (() => {
   // embedded in the doorbell's settings, which already explain where to get the SDK
-  if (new URLSearchParams(location.search).has('embed'))
+  if (new URLSearchParams(location.search).has('embed')) {
     document.body.classList.add('embed');
+    matchHost();
+  }
+
+  // Take the Scrypted UI's theme and grow the iframe to fit. The page is served from the
+  // same origin, so the iframe element's styles (Vuetify theme variables) are readable.
+  function matchHost() {
+    const host = window.frameElement;
+    if (!host)
+      return;
+    const cs = getComputedStyle(host);
+    const color = (name, alpha) => {
+      const v = cs.getPropertyValue('--v-theme-' + name).trim();
+      return v && (alpha ? 'rgba(' + v + ', ' + alpha + ')' : 'rgb(' + v + ')');
+    };
+    const theme = {
+      '--bg': 'transparent',
+      '--fg': color('on-surface'),
+      '--muted': color('on-surface', 0.7),
+      '--line': color('on-surface', 0.38),
+      '--accent': color('primary'),
+      '--ok': color('success'),
+      '--err': color('error'),
+      '--track': color('on-surface', 0.12),
+    };
+    if (!theme['--fg'])
+      return;
+    const root = document.documentElement.style;
+    for (const [name, value] of Object.entries(theme))
+      root.setProperty(name, value);
+    // a color-scheme different from the host's makes the browser paint the iframe opaque
+    root.colorScheme = cs.colorScheme;
+    document.body.style.font = cs.fontSize + '/1.5 ' + cs.fontFamily;
+    // the body, not the document: the document is never shorter than the iframe
+    new ResizeObserver(() => host.style.height = Math.ceil(document.body.getBoundingClientRect().height) + 'px').observe(document.body);
+  }
   const CHUNK = 256 * 1024 - 1;          // data frame = 0x00 marker + chunk, at most 256 KB
   const MAX_BUFFERED = 4 * 1024 * 1024;
   const base = location.pathname.replace(/\/sdk\/?$/, '/sdk');
