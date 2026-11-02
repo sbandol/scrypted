@@ -5,6 +5,7 @@ import { RtpPacket } from '../../../external/werift/packages/rtp/src/rtp/rtp';
 import { createRtspMediaStreamOptions, RtspProvider, UrlMediaStreamOptions } from "../../rtsp/src/rtsp";
 import { startRtpForwarderProcess } from '../../webrtc/src/rtp-forwarders';
 import { HikvisionDoorbellAPI, HikvisionDoorbellEvent } from "./doorbell-api";
+import { CallDetection } from "./call-status-controller";
 import { SipManager, SipRegistration, SipAudioTarget } from "./sip-manager";
 import { parseNumbers } from "xml2js/lib/processors";
 import { EventEmitter } from 'node:events';
@@ -34,6 +35,7 @@ const SIP_SERVER_ROOM_NUMBER_KEY: string = 'sipServerRoomNumber';
 const SIP_SERVER_PROXY_PHONE_KEY: string = 'sipServerProxyPhone';
 const SIP_SERVER_DOORBELL_PHONE_KEY: string = 'sipServerDoorbellPhone';
 const SIP_SERVER_BUTTON_NUMBER_KEY: string = 'sipServerButtonNumber';
+const CALL_DETECTION_KEY: string = 'callDetection';
 
 const DEFAULT_ROOM_NUMBER: string = '5871';
 const DEFAULT_PROXY_PHONE: string = '10102';
@@ -54,8 +56,13 @@ function channelToCameraNumber(channel: string) {
 
 enum SipMode {
     Off = "Don't Use SIP",
-    Client = "Connect to SIP Proxy", 
+    Client = "Connect to SIP Proxy",
     Server = "Emulate SIP Proxy"
+}
+
+enum CallDetectionMode {
+    Polling = "Polling",
+    Push = "Push (Hikvision SDK)"
 }
 
 export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, Intercom, Reboot, Readme {
@@ -534,7 +541,7 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
             this.getHttpPort(), 
             this.getUsername(), 
             this.getPassword(), 
-            this.isCallPolling(),
+            this.getCallDetection(),
             this.console, 
             this.storage
         );
@@ -1187,7 +1194,7 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
             this.getHttpPort(), 
             this.getUsername(), 
             this.getPassword(), 
-            this.isCallPolling(),
+            this.getCallDetection(),
             this.console,
             this.storage,
             true // skipCapabilitiesInit
@@ -1489,8 +1496,10 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
         this.console.debug ('Using call status polling for invite detection');
     }
 
-    private isCallPolling(): boolean {
-        return this.getSipMode() === SipMode.Off;
+    private getCallDetection(): CallDetection {
+        if (this.getSipMode() !== SipMode.Off)
+            return 'none';
+        return this.storage.getItem (CALL_DETECTION_KEY) === CallDetectionMode.Push ? 'push' : 'poll';
     }
 }
 
@@ -1563,9 +1572,9 @@ export class HikvisionDoorbellProvider extends RtspProvider
                 `${settings.ip}`, 
                 `${settings.httpPort || '80'}`,
                  username, 
-                 password, 
-                 false,
-                 this.console, 
+                 password,
+                 'none',
+                 this.console,
                  this.storage
                 );
             try {
