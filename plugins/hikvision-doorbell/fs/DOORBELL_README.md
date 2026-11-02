@@ -63,10 +63,10 @@ In this mode the plugin learns about calls through the **Call Detection** settin
 Push needs the Device Network SDK, which Hikvision does not allow plugins to include:
 
 1. Download the SDK for the Scrypted server's processor: **ArmLinux64** from the [Hikvision Open Platform](https://open.hikvision.com/download/5cda567cf47ae80dd41a54b3?type=10) for arm64 (sign-in with a phone number), or **Device Network SDK_Linux64** from [Hikvision HiTools](https://www.hikvision.com/en/support/tools/hitools/clf4633a00e385d6ea/) for x64 (no sign-in).
-2. Select **Push (Hikvision SDK)** and upload the zip, exactly as downloaded, in the **Hikvision SDK** block that appears. Only the Linux library folder is kept, in `hcnetsdk/` in the plugin's data folder.
-3. **Push Status** shows `Armed` once the SDK is connected to the `doorbell` (SDK port 8000 unless changed on the `doorbell`).
+2. Select **Push (Hikvision SDK)**, save, and upload the zip, exactly as downloaded, in the **Hikvision SDK** block that appears. Only the Linux library folder is kept, in `hcnetsdk/` in the plugin's data folder.
+3. The **Hikvision SDK** block shows `Push: Armed` once the SDK is connected to the `doorbell` (SDK port 8000 unless changed on the `doorbell`).
 
-Push runs on Linux arm64 and x64 servers with `python3` installed. Whenever push cannot run (no SDK, unsupported server, `doorbell` unreachable), **Push Status** says why and the plugin keeps polling. Some firmware versions do not push call events; if rings are missed, switch back to **Polling**.
+Push runs on Linux arm64 and x64 servers with `python3` installed. Whenever push cannot run (no SDK, unsupported server, `doorbell` unreachable), the **Hikvision SDK** block says why and the plugin keeps polling. Some firmware versions do not push call events; if rings are missed, switch back to **Polling**.
 
 **Log All SDK Events** writes every event the `doorbell` sends over the SDK, plus poll results during calls, to `hcnetsdk/diagnostics.jsonl` (5 MB, one rotation). Use it to check what your firmware pushes.
 

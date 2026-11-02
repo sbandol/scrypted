@@ -1211,7 +1211,6 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
             true, // skipCapabilitiesInit
             this.getPushSdkConfig()
         );
-        api.onPushStateChange = () => this.onDeviceEvent (ScryptedInterface.Settings, undefined);
         return api;
     }
 
@@ -1240,7 +1239,18 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
             this.eventApi = undefined;
             this.listener?.then (l => l.emit ('error', new Error ('new Hikvision SDK')));
         }
-        this.onDeviceEvent (ScryptedInterface.Settings, undefined);
+    }
+
+    /**
+     * Push state for the SDK box, undefined unless Push is the saved mode. The box polls it
+     * instead of a "Push Status" setting: a Settings event makes the device page reload its
+     * settings, which drops unsaved edits.
+     */
+    getPushStatus(): string | undefined
+    {
+        if (this.getCallDetection() !== 'push')
+            return undefined;
+        return pushStatusText (getSdkStatus(), this.eventApi?.getPushState());
     }
 
     private async callDetectionSettings(): Promise<Setting[]>
@@ -1289,7 +1299,7 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
                 type: 'html',
                 readonly: true,
                 value: `<p>Push needs Hikvision's Device Network SDK, which the plugin can't include. ${download}</p>
-                <iframe src="${endpoint}sdk?embed=1" title="Hikvision SDK upload" style="width:100%;height:150px;border:0"></iframe>`,
+                <iframe src="${endpoint}sdk?embed=1&device=${encodeURIComponent (this.nativeId)}" title="Hikvision SDK upload" style="width:100%;height:150px;border:0"></iframe>`,
             },
             {
                 key: SDK_PORT_KEY,
@@ -1297,12 +1307,6 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
                 description: 'Device SDK (server) port, 8000 unless changed on the doorbell.',
                 type: 'number',
                 value: parseInt (this.storage.getItem (SDK_PORT_KEY)) || DEFAULT_SDK_PORT,
-            },
-            {
-                key: 'pushStatus',
-                title: 'Push Status',
-                readonly: true,
-                value: pushStatusText (status, this.eventApi?.getPushState()),
             },
             {
                 key: SDK_DIAGNOSTICS_KEY,
@@ -1639,7 +1643,11 @@ export class HikvisionDoorbellProvider extends RtspProvider implements HttpReque
             });
         }
         else if (path === '/sdk/status') {
-            response.send (JSON.stringify (getSdkStatus()), {
+            // ?device=<nativeId> (the box in a doorbell's settings) adds that doorbell's push state
+            const nativeId = new URL (request.url, 'http://localhost').searchParams.get ('device');
+            const device = nativeId && this.devices.get (nativeId);
+            const push = device instanceof HikvisionCameraDoorbell ? device.getPushStatus() : undefined;
+            response.send (JSON.stringify ({ ...getSdkStatus(), push }), {
                 headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
             });
         }
@@ -1666,11 +1674,9 @@ export class HikvisionDoorbellProvider extends RtspProvider implements HttpReque
     }
 
     private onSdkInstalled() {
-        for (const [nativeId, device] of this.devices) {
+        for (const device of this.devices.values()) {
             if (device instanceof HikvisionCameraDoorbell)
                 device.onSdkInstalled();
-            else
-                deviceManager.onDeviceEvent (nativeId, ScryptedInterface.Settings, undefined);
         }
     }
 

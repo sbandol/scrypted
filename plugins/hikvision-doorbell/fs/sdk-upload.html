@@ -47,7 +47,7 @@
   a { color: var(--accent); }
   .muted { color: var(--muted); }
   .here { font-weight: 600; }
-  .status { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 16px; }
+  .status { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 16px; white-space: pre-line; }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
   input[type=file] { max-width: 100%; color: var(--fg); font: inherit; }
   input[type=file]::file-selector-button {
@@ -204,6 +204,8 @@
   const bar = document.getElementById('progress');
   const result = document.getElementById('result');
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // set when embedded in a doorbell's settings: the status then includes its push state
+  const device = new URLSearchParams(location.search).get('device');
 
   function show(text, kind) {
     result.textContent = text;
@@ -212,7 +214,8 @@
 
   async function loadStatus() {
     try {
-      const response = await fetch(base + '/status', { cache: 'no-store', credentials: 'same-origin' });
+      const query = device ? '?device=' + encodeURIComponent(device) : '';
+      const response = await fetch(base + '/status' + query, { cache: 'no-store', credentials: 'same-origin' });
       if (!response.ok)
         throw new Error('HTTP ' + response.status);
       const s = await response.json();
@@ -229,6 +232,9 @@
         : 'No SDK installed yet.';
       if (!s.supported)
         text += ' ' + s.reason + ' Call detection keeps polling.';
+      // without an SDK, or on an unsupported server, the line above already says why push is off
+      if (s.push && s.installed && s.supported)
+        text += '\nPush: ' + s.push;
       statusEl.textContent = text;
     }
     catch (e) {
@@ -319,6 +325,9 @@
   };
 
   loadStatus();
+  // push state changes (starting, armed, down) without a page reload
+  if (device)
+    setInterval(() => document.hidden || loadStatus(), 3000);
 })();
 </script>
 </body>

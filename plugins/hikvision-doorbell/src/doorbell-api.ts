@@ -100,7 +100,6 @@ export class HikvisionDoorbellAPI extends HikvisionCameraAPI
     private sdkSource?: SdkCallSource;
     private diagnostics?: DiagnosticsLog;
     private pushState?: PushState;
-    onPushStateChange?: () => void;
 
     // Alert stream health tracking
     private alertTick?: number;
@@ -880,7 +879,6 @@ export class HikvisionDoorbellAPI extends HikvisionCameraAPI
     private setPushState (state: PushState)
     {
         this.pushState = state;
-        this.onPushStateChange?.();
     }
 
     /**
