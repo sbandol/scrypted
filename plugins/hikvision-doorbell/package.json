@@ -31,7 +31,9 @@
       "type": "DeviceProvider",
       "interfaces": [
          "DeviceProvider",
-         "DeviceCreator"
+         "DeviceCreator",
+         "HttpRequestHandler",
+         "EngineIOHandler"
       ],
       "pluginDependencies": [
          "@scrypted/prebuffer-mixin"

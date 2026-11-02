@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hikvision SDK Upload</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1f2328;
+    --muted: #59636e;
+    --line: #d1d9e0;
+    --accent: #0969da;
+    --ok: #1a7f37;
+    --err: #cf222e;
+    --track: #eff2f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --fg: #e6edf3;
+      --muted: #9198a1;
+      --line: #3d444d;
+      --accent: #4493f8;
+      --ok: #3fb950;
+      --err: #f85149;
+      --track: #21262d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 640px; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  p { margin: 0 0 12px; }
+  ol { margin: 0 0 16px; padding-left: 20px; }
+  li { margin-bottom: 8px; }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); }
+  .here { font-weight: 600; }
+  .status { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 16px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  input[type=file] { max-width: 100%; color: var(--fg); }
+  button {
+    padding: 6px 14px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--accent);
+    color: #ffffff;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .bar { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; margin-bottom: 8px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+  .ok { color: var(--ok); }
+  .err { color: var(--err); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Hikvision SDK for call push</h1>
+  <p>
+    Push mode lets the door station tell Scrypted about a ring the moment the button is pressed,
+    instead of Scrypted asking it every second. It needs Hikvision's Device Network SDK, which
+    Hikvision does not allow plugins to include, so download it yourself and upload the zip here.
+  </p>
+  <ol>
+    <li>
+      Download the Device Network SDK for this server's processor:
+      <ul>
+        <li id="pkg-arm64"><b>arm64</b> (Raspberry Pi and most ARM boxes): the "ArmLinux64" package on
+          <a href="https://open.hikvision.com/download/5cda567cf47ae80dd41a54b3?type=10" target="_blank" rel="noopener">Hikvision's open platform</a>.
+          The download asks for a Hikvision open platform account, which signs in with a phone number.</li>
+        <li id="pkg-x64"><b>x64</b> (Intel or AMD): "Device Network SDK_Linux64" on
+          <a href="https://www.hikvision.com/en/support/tools/hitools/clf4633a00e385d6ea/" target="_blank" rel="noopener">Hikvision HiTools</a>.</li>
+      </ul>
+    </li>
+    <li>Upload the zip exactly as downloaded. Only its Linux library folder is kept.</li>
+    <li>In the doorbell's settings, set Call Detection to "Push (Hikvision SDK)".</li>
+  </ol>
+
+  <div class="status" id="status">Checking this server...</div>
+
+  <div class="row">
+    <input type="file" id="file" accept=".zip,application/zip">
+    <button id="upload" disabled>Upload</button>
+  </div>
+  <div class="bar"><div id="progress"></div></div>
+  <div id="result" class="muted"></div>
+</main>
+<script>
+(() => {
+  const CHUNK = 256 * 1024 - 1;          // data frame = 0x00 marker + chunk, at most 256 KB
+  const MAX_BUFFERED = 4 * 1024 * 1024;
+  const base = location.pathname.replace(/\/sdk\/?$/, '/sdk');
+  const statusEl = document.getElementById('status');
+  const fileEl = document.getElementById('file');
+  const button = document.getElementById('upload');
+  const bar = document.getElementById('progress');
+  const result = document.getElementById('result');
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function show(text, kind) {
+    result.textContent = text;
+    result.className = kind || 'muted';
+  }
+
+  async function loadStatus() {
+    try {
+      const response = await fetch(base + '/status', { cache: 'no-store', credentials: 'same-origin' });
+      if (!response.ok)
+        throw new Error('HTTP ' + response.status);
+      const s = await response.json();
+      for (const arch of ['arm64', 'x64']) {
+        const item = document.getElementById('pkg-' + arch);
+        if (item)
+          item.className = s.arch === arch ? 'here' : 'muted';
+      }
+      let text = 'This server: ' + s.arch + '. ';
+      text += s.installed
+        ? 'Installed SDK: ' + s.installed.version + ' (' + s.installed.arch + '), uploaded ' + new Date(s.installed.installedAt).toLocaleString() + '.'
+        : 'No SDK installed yet.';
+      if (!s.supported)
+        text += ' ' + s.reason + ' Call detection keeps polling.';
+      statusEl.textContent = text;
+    }
+    catch (e) {
+      statusEl.textContent = 'Could not read the SDK status (' + e.message + '). Are you signed in to Scrypted?';
+    }
+  }
+
+  async function upload(file) {
+    const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + base + '/upload';
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';
+    let finished = false;
+
+    const done = new Promise((resolve) => {
+      ws.onmessage = (event) => {
+        const message = JSON.parse(typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data));
+        if ('progress' in message) {
+          bar.style.width = Math.round(message.progress / file.size * 100) + '%';
+          if (message.progress >= file.size)
+            show('Installing...');
+        }
+        else if (message.ok) {
+          finished = true;
+          bar.style.width = '100%';
+          show('Installed Hikvision SDK ' + message.ok.version + ' (' + message.ok.arch + ').', 'ok');
+          resolve();
+        }
+        else if (message.error) {
+          finished = true;
+          show(message.error, 'err');
+          resolve();
+        }
+      };
+      ws.onclose = () => {
+        if (!finished)
+          show('The connection closed before the upload finished. Try again.', 'err');
+        finished = true;
+        resolve();
+      };
+      ws.onerror = () => {};
+    });
+
+    await new Promise((resolve, reject) => {
+      ws.onopen = resolve;
+      setTimeout(() => reject(new Error('Could not connect to Scrypted.')), 10000);
+    });
+
+    ws.send(JSON.stringify({ start: { size: file.size, name: file.name } }));
+    for (let offset = 0; offset < file.size && !finished; offset += CHUNK) {
+      const chunk = new Uint8Array(await file.slice(offset, offset + CHUNK).arrayBuffer());
+      const frame = new Uint8Array(chunk.length + 1);
+      frame.set(chunk, 1);
+      while (ws.bufferedAmount > MAX_BUFFERED && !finished)
+        await sleep(20);
+      ws.send(frame);
+    }
+    if (!finished) {
+      ws.send(JSON.stringify({ end: true }));
+      show('Installing...');
+    }
+    await done;
+    ws.close();
+  }
+
+  fileEl.onchange = () => {
+    button.disabled = !fileEl.files.length;
+    bar.style.width = '0';
+    show('');
+  };
+
+  button.onclick = async () => {
+    const file = fileEl.files[0];
+    if (!file)
+      return;
+    button.disabled = true;
+    fileEl.disabled = true;
+    bar.style.width = '0';
+    show('Uploading ' + file.name + '...');
+    try {
+      await upload(file);
+    }
+    catch (e) {
+      show(e.message, 'err');
+    }
+    button.disabled = false;
+    fileEl.disabled = false;
+    loadStatus();
+  };
+
+  loadStatus();
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 import { HikvisionCamera } from "../../hikvision/src/main"
-import sdk, { Camera, Device, DeviceCreatorSettings, DeviceInformation, FFmpegInput, Intercom, MediaObject, MediaStreamOptions, Reboot, RequestPictureOptions, ScryptedDeviceType, ScryptedInterface, ScryptedMimeTypes, Setting, LockState, Readme } from "@scrypted/sdk";
+import sdk, { Camera, Device, DeviceCreatorSettings, DeviceInformation, EngineIOHandler, FFmpegInput, HttpRequest, HttpRequestHandler, HttpResponse, Intercom, MediaObject, MediaStreamOptions, Reboot, RequestPictureOptions, ScryptedDeviceType, ScryptedInterface, ScryptedMimeTypes, Setting, LockState, Readme } from "@scrypted/sdk";
 import { PassThrough } from "stream";
 import { RtpPacket } from '../../../external/werift/packages/rtp/src/rtp/rtp';
 import { createRtspMediaStreamOptions, RtspProvider, UrlMediaStreamOptions } from "../../rtsp/src/rtsp";
@@ -18,8 +18,11 @@ import { join } from 'path';
 import { makeDebugConsole, DebugController } from "./debug-console";
 import { RtpStreamSwitcher } from "./rtp-stream-switcher";
 import { HttpStreamSwitcher, HttpSession } from "./http-stream-switcher";
+import { installSdkZip } from "./sdk/sdk-package";
+import { SdkUploadSession } from "./sdk/sdk-upload";
+import { getSdkStatus, pluginVolume } from "./sdk/sdk-host";
 
-const { mediaManager } = sdk;
+const { mediaManager, deviceManager } = sdk;
 
 const PROVIDED_DEVICES_KEY: string = 'providedDevices';
 
@@ -47,6 +50,10 @@ const UNREACHED_RETRY_SEC: number = 10  // Retry timeout when device is unreacha
 const CANCEL_CALL_DELAY_SEC: number = 3  // Delay before killing active intercom after cancelCall
 const GRACE_PERIOD_SEC: number = 2  // Grace period for seamless SIP reconnection
 const HTTP_SWITCH_DELAY_SEC: number = 1  // Delay between closing old and opening new HTTP session
+
+function endpointPath(request: HttpRequest): string {
+    return request.url.slice (request.rootPath.length).split ('?')[0];
+}
 
 function channelToCameraNumber(channel: string) {
     if (!channel)
@@ -1503,12 +1510,50 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
     }
 }
 
-export class HikvisionDoorbellProvider extends RtspProvider
+export class HikvisionDoorbellProvider extends RtspProvider implements HttpRequestHandler, EngineIOHandler
 {
     static CAMERA_NATIVE_ID_KEY: string = 'cameraNativeId';
 
     constructor() {
         super();
+    }
+
+    // SDK upload page: <endpoint>/sdk (page), /sdk/status (JSON), /sdk/upload (WebSocket)
+    async onRequest(request: HttpRequest, response: HttpResponse): Promise<void> {
+        const path = endpointPath (request);
+        if (path === '/sdk' || path === '/sdk/') {
+            response.sendFile ('sdk-upload.html', {
+                headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+            });
+        }
+        else if (path === '/sdk/status') {
+            response.send (JSON.stringify (getSdkStatus()), {
+                headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+            });
+        }
+        else {
+            response.send ('Not Found', { code: 404 });
+        }
+    }
+
+    async onConnection(request: HttpRequest, ws: WebSocket): Promise<void> {
+        if (endpointPath (request) !== '/sdk/upload') {
+            ws.close();
+            return;
+        }
+        const session = new SdkUploadSession (async (zip) => {
+            const info = await installSdkZip (zip, pluginVolume(), process.arch);
+            this.console.info (`Hikvision SDK ${info.version} (${info.arch}) installed`);
+            this.onSdkInstalled();
+            return info;
+        }, (message) => ws.send (message));
+        ws.onmessage = (event) => session.onMessage (event.data);
+    }
+
+    private onSdkInstalled() {
+        for (const nativeId of this.devices.keys()) {
+            deviceManager.onDeviceEvent (nativeId, ScryptedInterface.Settings, undefined);
+        }
     }
 
     getScryptedDeviceCreator(): string {
