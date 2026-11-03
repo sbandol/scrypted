@@ -803,6 +803,8 @@ export class HikvisionDoorbellAPI extends HikvisionCameraAPI
             this.console.info ('Call status polling stopped');
         }
         this.isCallPollingActive = false;
+        // push mode stops the poll at the end of each call; the next call starts from idle
+        this.lastCallState = 'idle';
     }
 
     private startCallDetection()
