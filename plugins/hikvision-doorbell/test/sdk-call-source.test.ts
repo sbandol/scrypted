@@ -149,3 +149,32 @@ test('forwards raw lines as message events', async () => {
     assert.deepEqual (events, []);
     source.stop();
 });
+
+test('wrong password or locked account stops restarts', async (t) => {
+    t.mock.timers.enable ({ apis: ['setTimeout'] });
+    for (const [code, words] of [[1, 'password'], [153, 'locked']] as const) {
+        const { source, children, events } = setup();
+        source.start();
+        children[0].line ({ type: 'error', stage: 'login', code, message: 'NET_DVR_Login_V30 failed' });
+        await settle();
+        children[0].exit (2);
+        assert.equal (events.length, 1);
+        assert.equal (events[0][0], 'down');
+        assert.match (events[0][1], new RegExp (words));
+        t.mock.timers.tick (120000);
+        assert.equal (children.length, 1);
+        source.stop();
+    }
+});
+
+test('other login errors keep retrying', async (t) => {
+    t.mock.timers.enable ({ apis: ['setTimeout'] });
+    const { source, children } = setup();
+    source.start();
+    children[0].line ({ type: 'error', stage: 'login', code: 7, message: 'NET_DVR_Login_V30 failed' });
+    await settle();
+    children[0].exit (2);
+    t.mock.timers.tick (5000);
+    assert.equal (children.length, 2);
+    source.stop();
+});

@@ -21,6 +21,13 @@ export interface SdkCallSourceOptions
 const DEFAULT_RESTART_DELAYS_MS = [5000, 10000, 20000, 40000, 60000];
 const STOP_GRACE_MS = 3000;
 
+// HCNetSDK.h NET_DVR_PASSWORD_ERROR / NET_DVR_USER_LOCKED: retrying only adds failed logins
+// and can lock the server's address out of the doorbell, polling included
+const AUTH_ERRORS: Record<number, string> = {
+    1: 'wrong user name or password',
+    153: 'user locked on the doorbell',
+};
+
 /**
  * Runs the HCNetSDK sidecar for one door station and turns its output into events:
  * 'ready'(sdkVersion), 'ring', 'end', 'down'(reason) and 'message'(SidecarMessage)
@@ -34,6 +41,7 @@ export class SdkCallSource extends EventEmitter
     private attempt = 0;
     private sdkVersion = '';
     private lastError = '';
+    private authError?: string;
     private restartTimer?: NodeJS.Timeout;
 
     constructor (private o: SdkCallSourceOptions)
@@ -72,6 +80,7 @@ export class SdkCallSource extends EventEmitter
         const { libDir, scriptPath, host, port, username, password, diagnostics } = this.o;
         const spawnFn = this.o.spawnFn ?? spawn;
         this.lastError = '';
+        this.authError = undefined;
         this.o.console.info ('Starting HCNetSDK sidecar');
         const child = spawnFn (this.o.pythonPath ?? 'python3', [scriptPath, libDir], {
             cwd: libDir,
@@ -129,7 +138,10 @@ export class SdkCallSource extends EventEmitter
                 }
                 break;
             case 'error':
-                this.lastError = `${message.stage} failed: ${message.message} (SDK error ${message.code})`;
+                this.authError = message.stage === 'login' ? AUTH_ERRORS[message.code] : undefined;
+                this.lastError = this.authError
+                    ? `login failed: ${this.authError} (SDK error ${message.code}), not retrying until settings are saved`
+                    : `${message.stage} failed: ${message.message} (SDK error ${message.code})`;
                 this.o.console.error (`HCNetSDK sidecar ${this.lastError}`);
                 break;
         }
@@ -154,6 +166,9 @@ export class SdkCallSource extends EventEmitter
         }
         const reason = this.lastError || `sidecar exited (${signal ?? `code ${code}`})`;
         this.emit ('down', reason);
+        if (this.authError) {
+            return;
+        }
 
         const delays = this.o.restartDelaysMs ?? DEFAULT_RESTART_DELAYS_MS;
         const delay = delays[Math.min (this.attempt, delays.length - 1)];
