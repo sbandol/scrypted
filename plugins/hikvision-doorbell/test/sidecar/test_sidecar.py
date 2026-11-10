@@ -70,5 +70,29 @@ class Process(unittest.TestCase):
         self.assertNotIn(CONFIG['password'], result.stdout + result.stderr)
 
 
+class FakeSdk:
+    def __init__(self):
+        self.calls = []
+
+    def NET_DVR_StartRemoteConfig(self, user_id, command, cond, size, callback, user):
+        self.calls.append(command)
+        return 7
+
+    def NET_DVR_GetLastError(self):
+        return 0
+
+
+class CallChannel(unittest.TestCase):
+    def test_not_opened_without_diagnostics(self):
+        sdk = FakeSdk()
+        self.assertIsNone(sidecar.open_call_channel(sdk, 0, False, None))
+        self.assertEqual(sdk.calls, [])
+
+    def test_opened_with_diagnostics(self):
+        sdk = FakeSdk()
+        self.assertEqual(sidecar.open_call_channel(sdk, 0, True, None), 7)
+        self.assertEqual(sdk.calls, [sidecar.NET_DVR_VIDEO_CALL_SIGNAL_PROCESS])
+
+
 if __name__ == '__main__':
     unittest.main()

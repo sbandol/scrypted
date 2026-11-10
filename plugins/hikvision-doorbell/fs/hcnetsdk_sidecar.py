@@ -142,6 +142,20 @@ def describe_alarm(command, info, length):
     return {'len': length, 'head': ctypes.string_at(info, min(length, 64)).hex()}
 
 
+def open_call_channel(sdk, user_id, diagnostics, callback):
+    """Passive call-signal channel, for diagnostics only: nothing is sent, whatever the
+    station reports on it is logged. Returns the handle, or None when not opened."""
+    if not diagnostics:
+        return None
+    cond = VideoCallCond()
+    cond.dwSize = ctypes.sizeof(cond)
+    handle = sdk.NET_DVR_StartRemoteConfig(user_id, NET_DVR_VIDEO_CALL_SIGNAL_PROCESS, ctypes.byref(cond),
+                                           ctypes.sizeof(cond), callback, None)
+    emit(raw_message('call', NET_DVR_VIDEO_CALL_SIGNAL_PROCESS,
+                     {'opened': handle >= 0, 'error': None if handle >= 0 else sdk.NET_DVR_GetLastError()}))
+    return handle
+
+
 def main():
     if len(sys.argv) != 2:
         sys.stderr.write('usage: hcnetsdk_sidecar.py <libDir>\n')
@@ -229,21 +243,13 @@ def main():
         sdk.NET_DVR_Cleanup()
         return 2
 
-    # Passive call-signal channel: nothing is sent; with diagnostics on, whatever the
-    # station reports on it is logged.
-    cond = VideoCallCond()
-    cond.dwSize = ctypes.sizeof(cond)
-    call_handle = sdk.NET_DVR_StartRemoteConfig(user_id, NET_DVR_VIDEO_CALL_SIGNAL_PROCESS, ctypes.byref(cond),
-                                                ctypes.sizeof(cond), callbacks[2], None)
-    if diagnostics:
-        emit(raw_message('call', NET_DVR_VIDEO_CALL_SIGNAL_PROCESS,
-                         {'opened': call_handle >= 0, 'error': None if call_handle >= 0 else sdk.NET_DVR_GetLastError()}))
+    call_handle = open_call_channel(sdk, user_id, diagnostics, callbacks[2])
 
     emit({'type': 'ready', 'sdkVersion': sdk_version(sdk.NET_DVR_GetSDKBuildVersion())})
 
     sys.stdin.read()  # block until the plugin closes stdin
 
-    if call_handle >= 0:
+    if call_handle is not None and call_handle >= 0:
         sdk.NET_DVR_StopRemoteConfig(call_handle)
     sdk.NET_DVR_CloseAlarmChan_V30(alarm_handle)
     sdk.NET_DVR_Logout_V30(user_id)
