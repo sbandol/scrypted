@@ -748,7 +748,8 @@ export class HikvisionDoorbellAPI extends HikvisionCameraAPI
     // Timezone properties
     private deviceTimezone?: string; // GMT offset in format like '+03:00'
     
-    async getCallStatus(): Promise<string>
+    /** The station's call status, or undefined when the request failed. */
+    async getCallStatus(): Promise<string | undefined>
     {
         try {
             const response = await this.request ({
@@ -764,7 +765,7 @@ export class HikvisionDoorbellAPI extends HikvisionCameraAPI
             return callState;
         } catch (e) {
             this.console.error (`Failed to get call status: ${e}`);
-            return 'idle';
+            return undefined;
         }
     }
 
@@ -781,6 +782,10 @@ export class HikvisionDoorbellAPI extends HikvisionCameraAPI
         this.callStatusInterval = setInterval(async () => {
             try {
                 const callState = await this.getCallStatus();
+                if (callState === undefined) {
+                    // a failed request says nothing about the call; reading it as idle would end a live call
+                    return;
+                }
                 this.diagnostics?.append ('poll', { status: callState });
 
                 if (callState !== this.lastCallState) {
