@@ -40,7 +40,6 @@ const SIP_SERVER_DOORBELL_PHONE_KEY: string = 'sipServerDoorbellPhone';
 const SIP_SERVER_BUTTON_NUMBER_KEY: string = 'sipServerButtonNumber';
 const CALL_DETECTION_KEY: string = 'callDetection';
 const SDK_PORT_KEY: string = 'sdkPort';
-const SDK_DIAGNOSTICS_KEY: string = 'sdkDiagnostics';
 const DEFAULT_SDK_PORT: number = 8000;
 
 const DEFAULT_ROOM_NUMBER: string = '5871';
@@ -1226,7 +1225,8 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
             libDir: status.installed.libDir,
             scriptPath: sidecarScriptPath(),
             port: parseInt (this.storage.getItem (SDK_PORT_KEY)) || DEFAULT_SDK_PORT,
-            diagnostics: this.storage.getItem (SDK_DIAGNOSTICS_KEY) === 'true',
+            // the base class "Debug Events" (Advanced) toggle also turns on SDK diagnostics
+            diagnostics: this.storage.getItem ('debug') === 'true',
         };
     }
 
@@ -1307,13 +1307,6 @@ export class HikvisionCameraDoorbell extends HikvisionCamera implements Camera, 
                 description: 'Device SDK (server) port, 8000 unless changed on the doorbell.',
                 type: 'number',
                 value: parseInt (this.storage.getItem (SDK_PORT_KEY)) || DEFAULT_SDK_PORT,
-            },
-            {
-                key: SDK_DIAGNOSTICS_KEY,
-                title: 'Log All SDK Events',
-                description: 'Diagnostics: writes every event the doorbell sends over the SDK, plus poll results during calls, to hcnetsdk/diagnostics.jsonl in the plugin folder (5 MB, one rotation).',
-                type: 'boolean',
-                value: this.storage.getItem (SDK_DIAGNOSTICS_KEY) === 'true',
             },
         );
         return ret;

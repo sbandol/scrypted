@@ -68,7 +68,7 @@ Push needs the Device Network SDK, which Hikvision does not allow plugins to inc
 
 Push runs on Linux arm64 and x64 servers with `python3` installed. Whenever push cannot run (no SDK, unsupported server, `doorbell` unreachable), the **Hikvision SDK** block says why and the plugin keeps polling. If the SDK helper process exits or loses its connection to the `doorbell`, the plugin polls until it is back; a helper that hangs without exiting is not detected, and rings are missed until the plugin is reloaded. Some firmware versions do not push call events; if rings are missed, switch back to **Polling**.
 
-**Log All SDK Events** writes every event the `doorbell` sends over the SDK, plus poll results during calls, to `hcnetsdk/diagnostics.jsonl` (5 MB, one rotation). Use it to check what your firmware pushes.
+With **Debug Events** (Advanced) on, push mode also writes every event the `doorbell` sends over the SDK, plus poll results, to `hcnetsdk/diagnostics.jsonl` (5 MB, one rotation). Use it to check what your firmware pushes, then turn it off.
 
 #### Connect to SIP Proxy
 
