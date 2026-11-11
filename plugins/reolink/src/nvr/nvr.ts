@@ -103,6 +103,7 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
     lastErrorsCheck = undefined;
     lastDevicesStatusCheck = undefined;
     cameraNativeMap = new Map<string, ReolinkNvrCamera>();
+    uidlessChannelSeenCount = new Map<number, number>();
     processing = false;
 
     constructor(nativeId: string, plugin: ReolinkProvider) {
@@ -160,6 +161,11 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
                     this.storageSettings.values.devicesData = devicesData;
 
                     await this.discoverDevices(true);
+
+                    // Re-sync each camera's floodlight / PIR / siren children against the
+                    // fresh abilities, so a channel that was offline at startup gets them
+                    // back without a plugin restart (no-op when nothing changed).
+                    await this.forEachCamera('reportDevices', camera => camera.reportDevices());
                 }
 
                 const devicesMap = new Map<number, DeviceInputData>();
@@ -204,13 +210,11 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
                     if (this.storageSettings.values.debugEvents) {
                         logger.debug(`Events call result: ${JSON.stringify(eventsRes)}`);
                     }
-                    this.cameraNativeMap.forEach((camera) => {
-                        if (camera) {
-                            const channel = camera.storageSettings.values.rtspChannel;
-                            const cameraEventsData = eventsRes?.parsed[channel];
-                            if (cameraEventsData) {
-                                camera.processEvents(cameraEventsData);
-                            }
+                    await this.forEachCamera('processEvents', async (camera) => {
+                        const channel = camera.storageSettings.values.rtspChannel;
+                        const cameraEventsData = eventsRes?.parsed[channel];
+                        if (cameraEventsData) {
+                            await camera.processEvents(cameraEventsData);
                         }
                     });
                 }
@@ -222,13 +226,11 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
                         logger.debug(`Battery info call result: ${JSON.stringify({ batteryInfoData, response })}`);
                     }
 
-                    this.cameraNativeMap.forEach((camera) => {
-                        if (camera) {
-                            const channel = camera.storageSettings.values.rtspChannel;
-                            const cameraBatteryData = batteryInfoData[channel];
-                            if (cameraBatteryData) {
-                                camera.processBatteryData(cameraBatteryData);
-                            }
+                    await this.forEachCamera('processBatteryData', async (camera) => {
+                        const channel = camera.storageSettings.values.rtspChannel;
+                        const cameraBatteryData = batteryInfoData[channel];
+                        if (cameraBatteryData) {
+                            await camera.processBatteryData(cameraBatteryData);
                         }
                     });
                 }
@@ -242,13 +244,11 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
                             logger.info(`Status info raw result: ${JSON.stringify({ deviceStatusData, response })}`);
                         }
 
-                        this.cameraNativeMap.forEach((camera) => {
-                            if (camera) {
-                                const channel = camera.storageSettings.values.rtspChannel;
-                                const cameraDeviceStatusData = deviceStatusData[channel];
-                                if (cameraDeviceStatusData) {
-                                    camera.processDeviceStatusData(cameraDeviceStatusData);
-                                }
+                        await this.forEachCamera('processDeviceStatusData', async (camera) => {
+                            const channel = camera.storageSettings.values.rtspChannel;
+                            const cameraDeviceStatusData = deviceStatusData[channel];
+                            if (cameraDeviceStatusData) {
+                                await camera.processDeviceStatusData(cameraDeviceStatusData);
                             }
                         });
                     }
@@ -259,6 +259,28 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
                 this.processing = false;
             }
         }, 1000);
+    }
+
+    /**
+     * Runs `fn` for every live camera and waits for all of them.
+     *
+     * processEvents / processBatteryData / processDeviceStatusData are all `async`.
+     * Calling them from `Map.forEach` is fire-and-forget: the returned promise is
+     * dropped, so a rejection escapes the enclosing try/catch of the events-flow
+     * timer and surfaces as a process-level unhandledRejection attributed to the
+     * timer frame -- observed in the wild as a repeating
+     * "TypeError: Cannot read properties of undefined (reading 'id')" at this file.
+     *
+     * allSettled (not all) so one bad channel cannot prevent its siblings being
+     * processed, and every rejection is logged rather than silently swallowed.
+     */
+    private async forEachCamera(label: string, fn: (camera: ReolinkNvrCamera) => Promise<void>) {
+        const cameras = [...this.cameraNativeMap.values()].filter(camera => !!camera);
+        const results = await Promise.allSettled(cameras.map(camera => fn(camera)));
+        for (const result of results) {
+            if (result.status === 'rejected')
+                this.console.error(`Error in ${label}`, result.reason);
+        }
     }
 
     getClient() {
@@ -336,13 +358,41 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
 
     async syncEntitiesFromRemote() {
         const api = this.getClient();
-        const { channels, devicesData } = await api.getDevicesInfo();
+        const logger = this.getLogger();
+        const { allChannels, devicesData } = await api.getDevicesInfo();
 
-        for (const channel of channels) {
-            const { channelStatus, channelInfo } = devicesData[channel];
-            const name = channelStatus.name || `Channel ${channel}`;
+        for (const channel of allChannels ?? []) {
+            const { channelStatus, channelInfo } = devicesData?.[channel] ?? {};
+            const isAddIn = !channelStatus?.uid;
 
-            const nativeId = this.buildNativeId(channelStatus.uid);
+            if (isAddIn) {
+                const seenCount = (this.uidlessChannelSeenCount.get(channel) ?? 0) + 1;
+                this.uidlessChannelSeenCount.set(channel, seenCount);
+                if (seenCount < 2) {
+                    logger.log(`Channel ${channel} has no uid (seen ${seenCount}x) — waiting for stability`);
+                    continue;
+                }
+            } else {
+                this.uidlessChannelSeenCount.delete(channel);
+            }
+
+            const uid = channelStatus?.uid || `ch${channel}`;
+            const name = channelStatus?.name || `Channel ${channel}`;
+            const nativeId = this.buildNativeId(uid);
+
+            if (sdk.deviceManager.getNativeIds().includes(nativeId)) {
+                continue;
+            }
+
+            if (this.discoveredDevices.has(nativeId)) {
+                continue;
+            }
+
+            if (!isAddIn && !channelInfo?.typeInfo) {
+                logger.log(`Deferring discovery of channel ${channel} (${name}): the hub did not return its type info`);
+                continue;
+            }
+
             const device: Device = {
                 nativeId,
                 name,
@@ -351,23 +401,13 @@ export class ReolinkNvrDevice extends ScryptedDeviceBase implements Settings, De
                 type: ScryptedDeviceType.Camera,
                 info: {
                     manufacturer: 'Reolink',
-                    model: channelInfo.typeInfo
+                    model: channelInfo?.typeInfo || 'Add-in Camera',
                 }
             };
 
-            if (sdk.deviceManager.getNativeIds().includes(nativeId)) {
-                // const device = sdk.systemManager.getDeviceById<Device>(this.pluginId, nativeId);
-                // sdk.deviceManager.onDeviceDiscovered(device);
-                continue;
-            }
-
-            if (this.discoveredDevices.has(nativeId)) {
-                continue;
-            }
-
             this.discoveredDevices.set(nativeId, {
                 device,
-                description: `${name}`,
+                description: isAddIn ? `${name} (Add-in)` : `${name}`,
                 rtspChannel: channel,
             });
         }

@@ -46,6 +46,18 @@ if (SCRYPTED_SERVER_LISTEN_HOSTNAMES) {
     }
 }
 
+// constant time comparison for password hashes and tokens so the string comparison
+// does not leak how many leading characters matched.
+function timingSafeStringEqual(a: string | undefined, b: string | undefined) {
+    if (typeof a !== 'string' || typeof b !== 'string')
+        return false;
+    const ab = Buffer.from(a);
+    const bb = Buffer.from(b);
+    if (ab.length !== bb.length)
+        return false;
+    return crypto.timingSafeEqual(ab, bb);
+}
+
 async function listenServerPort(env: string, port: number, server: http.Server | https.Server | net.Server) {
     server.listen(port);
     try {
@@ -187,7 +199,7 @@ async function start(mainFilename: string, options?: {
         hash.update(salted);
         const sha = hash.digest().toString('hex');
 
-        callback(sha === user.passwordHash || password === user.token);
+        callback(timingSafeStringEqual(sha, user.passwordHash) || timingSafeStringEqual(password, user.token));
     });
 
     // the default http-auth will returns a WWW-Authenticate header if login fails.
@@ -273,7 +285,7 @@ async function start(mainFilename: string, options?: {
         // lack of login from cookie auth.
 
         const checkToken = (token: string) => {
-            if (process.env.SCRYPTED_ADMIN_TOKEN === token) {
+            if (process.env.SCRYPTED_ADMIN_TOKEN && timingSafeStringEqual(process.env.SCRYPTED_ADMIN_TOKEN, token)) {
                 let username = process.env.SCRYPTED_ADMIN_USERNAME;
                 if (!username) {
                     const firstAdmin = [...scrypted.usersService.users.values()].find(u => !u.aclId);
@@ -287,7 +299,7 @@ async function start(mainFilename: string, options?: {
             }
 
             for (const user of scrypted.usersService.users.values()) {
-                if (user.token === token) {
+                if (timingSafeStringEqual(user.token, token)) {
                     res.locals.username = user._id;
                     res.locals.aclId = user.aclId;
                     break;
@@ -302,7 +314,7 @@ async function start(mainFilename: string, options?: {
                 hash.update(salted);
                 const sha = hash.digest().toString('hex');
 
-                if (checkHash === sha) {
+                if (timingSafeStringEqual(checkHash, sha)) {
                     const userToken = checkValidUserToken(tokenPart);
                     if (userToken) {
                         res.locals.username = userToken.username;
@@ -551,8 +563,10 @@ async function start(mainFilename: string, options?: {
             return undefined;
         try {
             const userToken = UserToken.validateToken(token);
-            if (scrypted.usersService.users.has(userToken.username))
-                return userToken;
+            const user = scrypted.usersService.users.get(userToken.username);
+            if (!user || userToken.timestamp < user.passwordDate || userToken.aclId !== user.aclId)
+                return undefined;
+            return userToken;
         }
         catch (e) {
             // console.warn('invalid token', e.message);
@@ -594,9 +608,13 @@ async function start(mainFilename: string, options?: {
         };
     }
 
+    async function updateUser(user: ScryptedUser) {
+        await db.upsert(user);
+        scrypted.usersService.users.set(user._id, user);
+    }
+
     app.post('/login', async (req, res) => {
         const { username, password, change_password, maxAge: maxAgeRequested } = req.body;
-        const timestamp = Date.now();
         const maxAge = parseInt(maxAgeRequested) || ONE_DAY_MILLISECONDS;
         const alternateAddresses = await getAlternateAddresses();
 
@@ -614,7 +632,7 @@ async function start(mainFilename: string, options?: {
             const hash = crypto.createHash('sha256');
             hash.update(salted);
             const sha = hash.digest().toString('hex');
-            if (user.passwordHash !== sha && user.token !== password) {
+            if (!timingSafeStringEqual(user.passwordHash, sha) && !timingSafeStringEqual(user.token, password)) {
                 res.send({
                     error: 'Incorrect password.',
                     hasLogin,
@@ -622,7 +640,12 @@ async function start(mainFilename: string, options?: {
                 return;
             }
 
-            const userToken = new UserToken(username, user.aclId, timestamp, maxAge);
+            if (change_password) {
+                setScryptedUserPassword(user, change_password, Date.now());
+                await updateUser(user);
+            }
+
+            const userToken = new UserToken(username, user.aclId, Date.now(), maxAge);
             const login_user_token = userToken.toString();
             res.cookie(getLoginUserToken(req), login_user_token, {
                 maxAge,
@@ -630,11 +653,6 @@ async function start(mainFilename: string, options?: {
                 signed: true,
                 httpOnly: true,
             });
-
-            if (change_password) {
-                setScryptedUserPassword(user, change_password, timestamp);
-                await db.upsert(user);
-            }
 
             res.send({
                 ...createTokens(userToken),
@@ -657,7 +675,7 @@ async function start(mainFilename: string, options?: {
         const user = await scrypted.usersService.addUserInternal(username, password, undefined);
         hasLogin = true;
 
-        const userToken = new UserToken(username, user.aclId, timestamp);
+        const userToken = new UserToken(username, user.aclId, Date.now());
         const login_user_token = userToken.toString();
         res.cookie(getLoginUserToken(req), login_user_token, {
             maxAge,
@@ -725,7 +743,7 @@ async function start(mainFilename: string, options?: {
             const user = await db.tryGet(ScryptedUser, username) as ScryptedUser;
             if (!user.token) {
                 user.token = crypto.randomBytes(16).toString('hex');
-                await db.upsert(user);
+                await updateUser(user);
             }
 
             const userToken = new UserToken(user._id, user.aclId, Date.now());
